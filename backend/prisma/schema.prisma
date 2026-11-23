@@ -1,0 +1,122 @@
+// Prisma Schema para Sistema de Gestão Comercial
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  OPERADOR
+}
+
+enum PaymentType {
+  A_VISTA
+  A_PRAZO
+}
+
+enum PaymentStatus {
+  PAGO
+  PENDENTE
+}
+
+enum StockMovementType {
+  ENTRADA
+  SAIDA
+  AJUSTE
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(OPERADOR)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  sales Sale[]
+
+  @@map("users")
+}
+
+model Product {
+  id        String   @id @default(uuid())
+  name      String
+  unit      String   @default("UN") // UN, KG, CX, LT, M, etc.
+  price     Int      // Preço em centavos (R$ 10,50 -> 1050)
+  stock     Int      @default(0)    // Quantidade em estoque
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  saleItems      SaleItem[]
+  stockMovements StockMovement[]
+
+  @@map("products")
+}
+
+model Client {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String
+  email     String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  sales Sale[]
+
+  @@map("clients")
+}
+
+model Sale {
+  id            String        @id @default(uuid())
+  sellerId      String        @map("seller_id")
+  clientId      String        @map("client_id")
+  paymentType   PaymentType   @map("payment_type")
+  paymentStatus PaymentStatus @default(PENDENTE) @map("payment_status")
+  total         Int           // Valor total em centavos
+  paidAt        DateTime?     @map("paid_at")
+  createdAt     DateTime      @default(now()) @map("created_at")
+  updatedAt     DateTime      @updatedAt @map("updated_at")
+
+  seller         User            @relation(fields: [sellerId], references: [id])
+  client         Client          @relation(fields: [clientId], references: [id])
+  items          SaleItem[]
+  stockMovements StockMovement[]
+
+  @@map("sales")
+}
+
+model SaleItem {
+  id         String   @id @default(uuid())
+  saleId     String   @map("sale_id")
+  productId  String   @map("product_id")
+  quantity   Int
+  unitPrice  Int      @map("unit_price")  // Preço praticado no momento da venda (em centavos)
+  totalPrice Int      @map("total_price") // quantity * unitPrice (em centavos)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  sale    Sale    @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("sale_items")
+}
+
+model StockMovement {
+  id        String            @id @default(uuid())
+  productId String            @map("product_id")
+  quantity  Int               // Quantidade movimentada (positiva)
+  type      StockMovementType // ENTRADA, SAIDA, AJUSTE
+  reason    String            // Ex: "Venda #uuid", "Entrada manual", "Ajuste de inventário"
+  saleId    String?           @map("sale_id")
+  createdAt DateTime          @default(now()) @map("created_at")
+
+  product Product @relation(fields: [productId], references: [id])
+  sale    Sale?   @relation(fields: [saleId], references: [id], onDelete: SetNull)
+
+  @@map("stock_movements")
+}

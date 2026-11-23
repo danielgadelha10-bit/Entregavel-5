@@ -1,0 +1,21 @@
+{
+  "cluster": "gestao-comercial-cluster",
+  "serviceName": "gestao-comercial-backend-service",
+  "taskDefinition": "gestao-comercial-backend-task",
+  "desiredCount": 2,
+  "launchType": "FARGATE",
+  "networkConfiguration": {
+    "awsvpcConfiguration": {
+      "subnets": ["subnet-11111111", "subnet-22222222"],
+      "securityGroups": ["sg-33333333"],
+      "assignPublicIp": "ENABLED"
+    }
+  },
+  "loadBalancers": [
+    {
+      "targetGroupArn": "arn:aws:elasticloadbalancing:<AWS_REGION>:<ACCOUNT_ID>:targetgroup/gestao-comercial-tg/xxxxxxxx",
+      "containerName": "backend",
+      "containerPort": 3001
+    }
+  ]
+}
