@@ -79,7 +79,6 @@ export class ProductsService {
       // Se o estoque foi alterado manualmente pelo formulário de edição
       if (dto.stock !== undefined && dto.stock !== current.stock) {
         const diff = dto.stock - current.stock;
-        const type = diff > 0 ? StockMovementType.ENTRADA : StockMovementType.SAIDA;
         const absDiff = Math.abs(diff);
 
         await tx.stockMovement.create({
@@ -108,37 +107,54 @@ export class ProductsService {
   }
 
   async adjustStock(id: string, quantity: number, type: StockMovementType, reason: string) {
+    if ((type === StockMovementType.ENTRADA || type === StockMovementType.SAIDA) && quantity <= 0) {
+      throw new BadRequestException('A quantidade para entrada ou saída deve ser maior que zero');
+    }
+    if (type === StockMovementType.AJUSTE && quantity < 0) {
+      throw new BadRequestException('O estoque ajustado não pode ser negativo');
+    }
+
     return this.prisma.$transaction(async (tx) => {
       const product = await tx.product.findUnique({ where: { id } });
       if (!product) {
         throw new NotFoundException('Produto não encontrado');
       }
 
-      let newStock = product.stock;
+      let updated;
       if (type === StockMovementType.ENTRADA) {
-        newStock += quantity;
+        updated = await tx.product.update({
+          where: { id },
+          data: { stock: { increment: quantity } },
+        });
       } else if (type === StockMovementType.SAIDA) {
         if (product.stock < quantity) {
           throw new BadRequestException(`Estoque insuficiente. Disponível: ${product.stock}`);
         }
-        newStock -= quantity;
-      } else if (type === StockMovementType.AJUSTE) {
-        newStock = quantity;
+        updated = await tx.product.update({
+          where: { id },
+          data: { stock: { decrement: quantity } },
+        });
+      } else {
+        updated = await tx.product.update({
+          where: { id },
+          data: { stock: quantity },
+        });
+      }
+
+      if (updated.stock < 0) {
+        throw new BadRequestException(`Estoque insuficiente para concluir a movimentação.`);
       }
 
       await tx.stockMovement.create({
         data: {
           productId: id,
-          quantity: Math.abs(newStock - product.stock),
+          quantity: Math.abs(updated.stock - product.stock),
           type,
-          reason,
+          reason: reason.trim(),
         },
       });
 
-      return tx.product.update({
-        where: { id },
-        data: { stock: newStock },
-      });
+      return updated;
     });
   }
 }

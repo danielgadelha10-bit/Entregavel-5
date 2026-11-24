@@ -2,11 +2,11 @@ import React, { useEffect, useState } from 'react';
 import api from '../api/client';
 import { User, Role } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { formatDateTime } from '../utils/formatters';
+import { formatDateTime, extractApiErrorMessage } from '../utils/formatters';
 import { Shield, Briefcase, UserCheck, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export const UsersPage: React.FC = () => {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, updateCurrentUser } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -19,11 +19,12 @@ export const UsersPage: React.FC = () => {
   const fetchUsers = async () => {
     try {
       setLoading(true);
+      setError(null);
       const res = await api.get('/users');
       setUsers(res.data);
     } catch (err: any) {
       console.error(err);
-      setError('Erro ao carregar usuários cadastrados');
+      setError(extractApiErrorMessage(err, 'Erro ao carregar usuários cadastrados'));
     } finally {
       setLoading(false);
     }
@@ -35,12 +36,16 @@ export const UsersPage: React.FC = () => {
 
     try {
       await api.patch(`/users/${userId}`, { role: newRole });
+      if (userId === currentUser?.id && newRole !== currentUser.role) {
+        updateCurrentUser({ role: newRole });
+        return;
+      }
       setSuccessMsg('Perfil de acesso atualizado com sucesso!');
       fetchUsers();
       setTimeout(() => setSuccessMsg(null), 3000);
     } catch (err: any) {
       console.error(err);
-      setError(err.response?.data?.message || 'Falha ao alterar perfil de acesso');
+      setError(extractApiErrorMessage(err, 'Falha ao alterar perfil de acesso'));
     }
   };
 

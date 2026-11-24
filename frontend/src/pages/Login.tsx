@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { extractApiErrorMessage } from '../utils/formatters';
 import { Lock, Mail, AlertCircle, ArrowRight } from 'lucide-react';
 
 export const Login: React.FC = () => {
@@ -30,7 +31,7 @@ export const Login: React.FC = () => {
     } catch (err: any) {
       console.error(err);
       setError(
-        err.response?.data?.message || 'Falha ao autenticar. Verifique seu e-mail e senha.',
+        extractApiErrorMessage(err, 'Falha ao autenticar. Verifique seu e-mail e senha.'),
       );
     } finally {
       setLoading(false);

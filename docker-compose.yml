@@ -2,49 +2,81 @@ services:
   postgres:
     image: postgres:16-alpine
     container_name: gestao_comercial_db
-    restart: always
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
-      POSTGRES_DB: gestao_comercial
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-gestao_comercial}
+      TZ: ${TZ:-America/Sao_Paulo}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT:-5433}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d gestao_comercial"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-gestao_comercial}"]
       interval: 5s
       timeout: 5s
-      retries: 5
+      retries: 10
+      start_period: 10s
+    networks:
+      - gestao_network
 
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: gestao_comercial_backend
-    restart: always
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       PORT: 3001
-      DATABASE_URL: "postgresql://postgres:postgrespassword@postgres:5432/gestao_comercial?schema=public"
-      JWT_SECRET: "super-secret-jwt-key-gestao-comercial-2026-secure"
-      JWT_EXPIRES_IN: "7d"
-      NODE_ENV: "production"
+      NODE_ENV: ${NODE_ENV:-production}
+      TZ: ${TZ:-America/Sao_Paulo}
+      DATABASE_URL: "postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-DanielGadelha7}@postgres:5432/${POSTGRES_DB:-gestao_comercial}?schema=public"
+      JWT_SECRET: "${JWT_SECRET:-d7d9a733998cae6baefe729bf97e9b688487de92b1de5ec671e016fbf0d27a6a}"
+      JWT_EXPIRES_IN: "${JWT_EXPIRES_IN:-7d}"
     ports:
-      - "3001:3001"
+      - "${BACKEND_PORT:-3001}:3001"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "node -e \"require('http').get('http://127.0.0.1:3001/api/health', (r) => process.exit(r.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1));\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - gestao_network
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-/api}
     container_name: gestao_comercial_frontend
-    restart: always
+    restart: unless-stopped
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
-      - "3000:80"
+      - "${FRONTEND_PORT:-3000}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/ >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    networks:
+      - gestao_network
 
 volumes:
   postgres_data:
+
+networks:
+  gestao_network:
+    driver: bridge

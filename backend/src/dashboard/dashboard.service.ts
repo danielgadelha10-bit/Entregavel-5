@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentStatus, Role } from '@prisma/client';
+import { formatLocalDateKey } from '../common/date-range.util';
 
 @Injectable()
 export class DashboardService {
@@ -83,17 +84,17 @@ export class DashboardService {
       },
     });
 
-    // Agrupar por dia YYYY-MM-DD
+    // Agrupar por dia YYYY-MM-DD (no fuso local consistente com sevenDaysAgo)
     const dailyMap: { [date: string]: { count: number; totalInCents: number } } = {};
     for (let i = 0; i < 7; i++) {
       const d = new Date(sevenDaysAgo);
       d.setDate(d.getDate() + i);
-      const key = d.toISOString().split('T')[0];
+      const key = formatLocalDateKey(d);
       dailyMap[key] = { count: 0, totalInCents: 0 };
     }
 
     for (const s of salesLast7Days) {
-      const key = s.createdAt.toISOString().split('T')[0];
+      const key = formatLocalDateKey(s.createdAt);
       if (dailyMap[key]) {
         dailyMap[key].count += 1;
         dailyMap[key].totalInCents += s.total;

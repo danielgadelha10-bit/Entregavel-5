@@ -90,14 +90,59 @@ sistema-gestao-comercial/
 
 ### Opção 1: Com Docker Compose (Recomendado)
 
-Suba o banco de dados PostgreSQL, a API NestJS e o Frontend com um único comando:
-
+#### 1. Pré-requisitos (Docker Desktop)
+Certifique-se de que o **Docker Desktop** está instalado e em execução no computador:
 ```bash
-docker-compose up --build -d
+docker --version
+docker compose version
+```
+> **No Windows 10/11:** Caso o Docker não esteja instalado, habilite o WSL 2 (`wsl --install` como Administrador e reinicie se solicitado), instale o **Docker Desktop** (`winget install -e --id Docker.DockerDesktop` ou pelo site oficial da Docker) e abra o aplicativo até o motor iniciar.
+
+#### 2. Configurar Variáveis de Ambiente
+Na raiz do projeto, copie o arquivo de exemplo para criar o `.env` local (ignorado pelo Git) e ajuste se desejar personalizar portas ou chaves:
+```powershell
+# PowerShell (Windows)
+Copy-Item .env.example .env
+```
+```bash
+# Linux / macOS / Git Bash
+cp .env.example .env
 ```
 
-- **Frontend:** http://localhost:3000
+#### 3. Inicializar os Containers (PostgreSQL 16 + Backend + Frontend)
+Na raiz do projeto, execute:
+```bash
+docker compose up --build -d
+```
+Esse único comando sobe o PostgreSQL 16 com volume persistente, aplica automaticamente o schema do Prisma no banco, inicia a API NestJS e serve o Frontend React via Nginx.
+
+#### 4. Acessar a Aplicação
+- **Frontend (Aplicação Web):** http://localhost:3000
 - **Backend API:** http://localhost:3001/api
+- **Healthcheck da API:** http://localhost:3001/api/health
+
+> *(Opcional)* Para popular o banco Docker com dados iniciais de demonstração:
+> ```bash
+> docker compose exec backend npm run prisma:seed:prod
+> ```
+
+#### 5. Comandos Úteis e Encerramento
+- **Verificar status dos containers:**
+  ```bash
+  docker compose ps
+  ```
+- **Acompanhar logs:**
+  ```bash
+  docker compose logs -f
+  ```
+- **Encerrar os containers (mantendo os dados do banco preservados):**
+  ```bash
+  docker compose down
+  ```
+- **Encerrar e apagar também o volume do banco de dados:**
+  ```bash
+  docker compose down -v
+  ```
 
 ---
 
@@ -108,13 +153,14 @@ docker-compose up --build -d
 cd backend
 npm install
 
-# Copie o arquivo de variáveis de ambiente e ajuste a DATABASE_URL
+# Copie o arquivo de variáveis de ambiente e ajuste a DATABASE_URL com seu PostgreSQL local
 cp .env.example .env
 
-# Gerar o Prisma Client e aplicar migrações no banco
+# Gerar o Prisma Client e aplicar o schema no banco
+npx prisma generate
 npx prisma db push
 
-# (Opcional) Executar o seed de demonstração com usuários e produtos
+# (Opcional) Executar o seed de demonstração com usuários, produtos e clientes
 npm run prisma:seed
 
 # Iniciar o servidor em modo de desenvolvimento
@@ -133,16 +179,11 @@ Acesse a aplicação em `http://localhost:3000`.
 
 ---
 
-## 🔐 Credenciais de Demonstração (Seed)
+## 🔐 Usuários Iniciais e Seed de Demonstração
 
-Caso tenha executado `npm run prisma:seed`:
+Ao abrir o sistema com o banco vazio e cadastrar a primeira conta na tela de registro (`/register`), o primeiro usuário recebe automaticamente o perfil **ADMIN**, e os cadastros seguintes recebem o perfil **OPERADOR**.
 
-| Perfil | E-mail | Senha | Permissões |
-| :--- | :--- | :--- | :--- |
-| **ADMIN** | `admin@comercial.com` | `admin123` | Acesso total: Produtos, Clientes, Usuários, Vendas e Relatórios |
-| **OPERADOR** | `operador@comercial.com` | `operador123` | Ponto de Venda: Consulta produtos/estoque, clientes e registra vendas |
-
-> *Nota:* Ao registrar um novo usuário pela tela de cadastro, se o banco estiver vazio, ele será automaticamente configurado como **ADMIN**. Os cadastros subsequentes recebem perfil **OPERADOR**.
+Caso opte por executar o script de demonstração (`backend/prisma/seed.ts`), ele cria dois usuários de exemplo (ADMIN e OPERADOR), produtos, clientes e vendas iniciais — consulte e altere as senhas padrão diretamente em `backend/prisma/seed.ts` antes de usar fora de ambiente de testes.
 
 ---
 

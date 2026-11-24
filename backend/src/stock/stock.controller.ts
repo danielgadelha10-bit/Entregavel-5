@@ -1,4 +1,4 @@
-import { Controller, Get, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { StockService } from './stock.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
@@ -12,11 +12,25 @@ export class StockController {
     @Query('productId') productId?: string,
     @Query('limit') limit?: string,
   ) {
-    return this.stockService.getMovements(productId, limit ? parseInt(limit, 10) : 50);
+    let parsedLimit = 50;
+    if (limit !== undefined && limit !== '') {
+      parsedLimit = Number.parseInt(limit, 10);
+      if (!Number.isFinite(parsedLimit) || parsedLimit <= 0) {
+        throw new BadRequestException('O parâmetro limit deve ser um número inteiro positivo');
+      }
+    }
+    return this.stockService.getMovements(productId, parsedLimit);
   }
 
   @Get('low')
   async getLowStock(@Query('threshold') threshold?: string) {
-    return this.stockService.getLowStock(threshold ? parseInt(threshold, 10) : 5);
+    let parsedThreshold = 5;
+    if (threshold !== undefined && threshold !== '') {
+      parsedThreshold = Number.parseInt(threshold, 10);
+      if (!Number.isFinite(parsedThreshold) || parsedThreshold < 0) {
+        throw new BadRequestException('O parâmetro threshold deve ser um número inteiro não negativo');
+      }
+    }
+    return this.stockService.getLowStock(parsedThreshold);
   }
 }

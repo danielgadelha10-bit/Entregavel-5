@@ -1,7 +1,7 @@
-import { Injectable, BadRequestException, UnauthorizedException, ConflictException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, ConflictException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import * as argon2 from 'argon2';
-import { Role } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -14,35 +14,61 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto) {
-    const existing = await this.prisma.user.findUnique({
-      where: { email: dto.email.toLowerCase().trim() },
-    });
-
-    if (existing) {
-      throw new ConflictException('Já existe um usuário cadastrado com este e-mail');
-    }
-
-    // Regra de negócio: Primeiro usuário recebe automaticamente ADMIN, os demais OPERADOR
-    const usersCount = await this.prisma.user.count();
-    const role: Role = usersCount === 0 ? Role.ADMIN : Role.OPERADOR;
-
+    const normalizedEmail = dto.email.toLowerCase().trim();
     const hashedPassword = await argon2.hash(dto.password);
 
-    const user = await this.prisma.user.create({
-      data: {
-        name: dto.name.trim(),
-        email: dto.email.toLowerCase().trim(),
-        password: hashedPassword,
-        role,
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        createdAt: true,
-      },
-    });
+    const createUserInTx = async () => {
+      return this.prisma.$transaction(
+        async (tx) => {
+          const existing = await tx.user.findUnique({
+            where: { email: normalizedEmail },
+          });
+
+          if (existing) {
+            throw new ConflictException('Já existe um usuário cadastrado com este e-mail');
+          }
+
+          // Regra de negócio: Primeiro usuário recebe automaticamente ADMIN, os demais OPERADOR
+          const usersCount = await tx.user.count();
+          const role: Role = usersCount === 0 ? Role.ADMIN : Role.OPERADOR;
+
+          return tx.user.create({
+            data: {
+              name: dto.name.trim(),
+              email: normalizedEmail,
+              password: hashedPassword,
+              role,
+            },
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              role: true,
+              createdAt: true,
+            },
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    };
+
+    let user;
+    const maxAttempts = 3;
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        user = await createUserInTx();
+        break;
+      } catch (err: any) {
+        if (err?.code === 'P2002') {
+          throw new ConflictException('Já existe um usuário cadastrado com este e-mail');
+        }
+        // Retry apenas em conflito de serialização (P2034) ao registrar usuários simultaneamente
+        if (err?.code === 'P2034' && attempt < maxAttempts) {
+          continue;
+        }
+        throw err;
+      }
+    }
 
     const token = this.generateToken(user.id, user.email, user.role);
 

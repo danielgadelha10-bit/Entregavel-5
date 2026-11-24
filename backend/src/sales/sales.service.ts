@@ -1,13 +1,24 @@
 import { Injectable, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
-import { PaymentStatus, PaymentType, Role, StockMovementType } from '@prisma/client';
+import { PaymentStatus, PaymentType, Prisma, Role, StockMovementType } from '@prisma/client';
+import { buildCreatedAtFilter } from '../common/date-range.util';
 
 @Injectable()
 export class SalesService {
   constructor(private prisma: PrismaService) {}
 
   async create(sellerId: string, dto: CreateSaleDto) {
+    // Consolidar eventuais itens repetidos do mesmo produto para validação única de estoque
+    const consolidatedMap = new Map<string, number>();
+    for (const item of dto.items) {
+      consolidatedMap.set(item.productId, (consolidatedMap.get(item.productId) || 0) + item.quantity);
+    }
+    const items = Array.from(consolidatedMap.entries()).map(([productId, quantity]) => ({
+      productId,
+      quantity,
+    }));
+
     // Transação PostgreSQL completa: se faltar estoque para qualquer produto, cancela toda a venda
     return this.prisma.$transaction(async (tx) => {
       // 1. Validar cliente
@@ -29,7 +40,7 @@ export class SalesService {
         productName: string;
       }[] = [];
 
-      for (const item of dto.items) {
+      for (const item of items) {
         const product = await tx.product.findUnique({
           where: { id: item.productId },
         });
@@ -61,8 +72,8 @@ export class SalesService {
           productName: product.name,
         });
 
-        // 3. Atualizar estoque imediatamente dentro da transação
-        await tx.product.update({
+        // 3. Atualizar estoque imediatamente dentro da transação (atômico contra concorrência)
+        const updatedProduct = await tx.product.update({
           where: { id: product.id },
           data: {
             stock: {
@@ -70,6 +81,12 @@ export class SalesService {
             },
           },
         });
+
+        if (updatedProduct && updatedProduct.stock < 0) {
+          throw new BadRequestException(
+            `Estoque insuficiente para o produto "${product.name}". Toda a venda foi cancelada.`,
+          );
+        }
       }
 
       // 4. Determinar status de pagamento inicial
@@ -124,43 +141,61 @@ export class SalesService {
   }
 
   // Baixa de pagamentos pendentes apenas uma vez
-  async settlePayment(saleId: string) {
-    return this.prisma.$transaction(async (tx) => {
-      const sale = await tx.sale.findUnique({
-        where: { id: saleId },
-        include: {
-          client: true,
-          seller: { select: { id: true, name: true, email: true } },
-          items: { include: { product: true } },
+  async settlePayment(saleId: string, user?: { id: string; role: Role }) {
+    try {
+      return await this.prisma.$transaction(
+        async (tx) => {
+          const sale = await tx.sale.findUnique({
+            where: { id: saleId },
+            include: {
+              client: true,
+              seller: { select: { id: true, name: true, email: true } },
+              items: { include: { product: true } },
+            },
+          });
+
+          if (!sale) {
+            throw new NotFoundException('Venda não encontrada');
+          }
+
+          if (user && user.role === Role.OPERADOR && sale.sellerId !== user.id) {
+            throw new ForbiddenException(
+              'Acesso negado: você só pode baixar pagamentos das suas próprias vendas',
+            );
+          }
+
+          if (sale.paymentStatus === PaymentStatus.PAGO) {
+            const formattedDate = sale.paidAt ? new Date(sale.paidAt).toLocaleString('pt-BR') : '';
+            throw new BadRequestException(
+              `Este pagamento já foi baixado anteriormente${formattedDate ? ' em ' + formattedDate : ''}. Não é permitido baixar mais de uma vez.`,
+            );
+          }
+
+          const updatedSale = await tx.sale.update({
+            where: { id: saleId },
+            data: {
+              paymentStatus: PaymentStatus.PAGO,
+              paidAt: new Date(),
+            },
+            include: {
+              client: true,
+              seller: { select: { id: true, name: true, email: true } },
+              items: { include: { product: true } },
+            },
+          });
+
+          return updatedSale;
         },
-      });
-
-      if (!sale) {
-        throw new NotFoundException('Venda não encontrada');
-      }
-
-      if (sale.paymentStatus === PaymentStatus.PAGO) {
-        const formattedDate = sale.paidAt ? new Date(sale.paidAt).toLocaleString('pt-BR') : '';
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (err: any) {
+      if (err?.code === 'P2034') {
         throw new BadRequestException(
-          `Este pagamento já foi baixado anteriormente${formattedDate ? ' em ' + formattedDate : ''}. Não é permitido baixar mais de uma vez.`,
+          'Este pagamento já está sendo baixado por outra solicitação. Não é permitido baixar mais de uma vez.',
         );
       }
-
-      const updatedSale = await tx.sale.update({
-        where: { id: saleId },
-        data: {
-          paymentStatus: PaymentStatus.PAGO,
-          paidAt: new Date(),
-        },
-        include: {
-          client: true,
-          seller: { select: { id: true, name: true, email: true } },
-          items: { include: { product: true } },
-        },
-      });
-
-      return updatedSale;
-    });
+      throw err;
+    }
   }
 
   async findAll(user: { id: string; role: Role }, filters?: {
@@ -189,16 +224,9 @@ export class SalesService {
       where.paymentType = filters.paymentType;
     }
 
-    if (filters?.startDate || filters?.endDate) {
-      where.createdAt = {};
-      if (filters.startDate) {
-        where.createdAt.gte = new Date(filters.startDate);
-      }
-      if (filters.endDate) {
-        const end = new Date(filters.endDate);
-        end.setHours(23, 59, 59, 999);
-        where.createdAt.lte = end;
-      }
+    const createdAtFilter = buildCreatedAtFilter(filters?.startDate, filters?.endDate);
+    if (createdAtFilter) {
+      where.createdAt = createdAtFilter;
     }
 
     return this.prisma.sale.findMany({

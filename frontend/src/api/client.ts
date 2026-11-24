@@ -18,8 +18,11 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response && error.response.status === 401) {
-      // Se não for a própria rota de login
-      if (!window.location.pathname.includes('/login')) {
+      // Se não for a própria rota de login ou cadastro
+      if (
+        !window.location.pathname.includes('/login') &&
+        !window.location.pathname.includes('/register')
+      ) {
         localStorage.removeItem('access_token');
         localStorage.removeItem('user');
         window.location.href = '/login';

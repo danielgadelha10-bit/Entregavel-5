@@ -1,8 +1,8 @@
 import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards, Request } from '@nestjs/common';
 import { SalesService } from './sales.service';
 import { CreateSaleDto } from './dto/create-sale.dto';
+import { FindSalesQueryDto } from './dto/find-sales-query.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { PaymentStatus, PaymentType } from '@prisma/client';
 
 @Controller('sales')
 @UseGuards(JwtAuthGuard)
@@ -20,21 +20,8 @@ export class SalesController {
   }
 
   @Get()
-  async findAll(
-    @Request() req: any,
-    @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string,
-    @Query('clientId') clientId?: string,
-    @Query('paymentStatus') paymentStatus?: PaymentStatus,
-    @Query('paymentType') paymentType?: PaymentType,
-  ) {
-    return this.salesService.findAll(req.user, {
-      startDate,
-      endDate,
-      clientId,
-      paymentStatus,
-      paymentType,
-    });
+  async findAll(@Request() req: any, @Query() query: FindSalesQueryDto) {
+    return this.salesService.findAll(req.user, query);
   }
 
   @Get(':id')
@@ -43,7 +30,7 @@ export class SalesController {
   }
 
   @Patch(':id/settle-payment')
-  async settlePayment(@Param('id') id: string) {
-    return this.salesService.settlePayment(id);
+  async settlePayment(@Param('id') id: string, @Request() req: any) {
+    return this.salesService.settlePayment(id, req.user);
   }
 }

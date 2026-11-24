@@ -2,7 +2,12 @@ import React, { useEffect, useState } from 'react';
 import api from '../api/client';
 import { Product } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { formatCurrency, parseCurrencyToCents, centsToDecimalString } from '../utils/formatters';
+import {
+  formatCurrency,
+  parseCurrencyToCents,
+  centsToDecimalString,
+  extractApiErrorMessage,
+} from '../utils/formatters';
 import { Modal } from '../components/Modal';
 import {
   Package,
@@ -47,13 +52,14 @@ export const Products: React.FC = () => {
   const fetchProducts = async () => {
     try {
       setLoading(true);
+      setError(null);
       const res = await api.get('/products', {
         params: { search: search || undefined },
       });
       setProducts(res.data);
     } catch (err: any) {
       console.error(err);
-      setError('Erro ao carregar produtos');
+      setError(extractApiErrorMessage(err, 'Erro ao carregar produtos'));
     } finally {
       setLoading(false);
     }
@@ -95,6 +101,12 @@ export const Products: React.FC = () => {
     setFormError(null);
     setSaving(true);
 
+    if (!/\d/.test(priceInput)) {
+      setFormError('Informe um preço válido (ex: 38,50)');
+      setSaving(false);
+      return;
+    }
+
     const priceInCents = parseCurrencyToCents(priceInput);
     if (priceInCents < 0) {
       setFormError('O preço não pode ser negativo');
@@ -123,7 +135,7 @@ export const Products: React.FC = () => {
       fetchProducts();
     } catch (err: any) {
       console.error(err);
-      setFormError(err.response?.data?.message || 'Falha ao salvar produto.');
+      setFormError(extractApiErrorMessage(err, 'Falha ao salvar produto.'));
     } finally {
       setSaving(false);
     }
@@ -145,7 +157,7 @@ export const Products: React.FC = () => {
       fetchProducts();
     } catch (err: any) {
       console.error(err);
-      setFormError(err.response?.data?.message || 'Erro ao ajustar estoque');
+      setFormError(extractApiErrorMessage(err, 'Erro ao ajustar estoque'));
     } finally {
       setSaving(false);
     }
@@ -425,10 +437,13 @@ export const Products: React.FC = () => {
             </label>
             <input
               type="number"
-              min="1"
+              min={stockAdjustmentType === 'AJUSTE' ? '0' : '1'}
               required
               value={stockAdjustmentQty}
-              onChange={(e) => setStockAdjustmentQty(parseInt(e.target.value || '1', 10))}
+              onChange={(e) => {
+                const parsed = parseInt(e.target.value || '0', 10);
+                setStockAdjustmentQty(Number.isNaN(parsed) ? 0 : parsed);
+              }}
               className="w-full px-3 py-2 rounded-lg border border-slate-300 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
             />
           </div>

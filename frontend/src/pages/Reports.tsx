@@ -1,7 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api/client';
 import { ReportResponse } from '../types';
-import { formatCurrency, formatDateTime } from '../utils/formatters';
+import {
+  formatCurrency,
+  formatDateTime,
+  getLocalDateInputValue,
+  toStartOfDayIso,
+  toEndOfDayIso,
+  extractApiErrorMessage,
+} from '../utils/formatters';
 import {
   BarChart3,
   Calendar,
@@ -21,15 +28,13 @@ export const Reports: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Filtros de Data: padrão mês atual
+  // Filtros de Data: padrão mês atual (no fuso horário local)
   const [startDate, setStartDate] = useState(() => {
     const d = new Date();
     d.setDate(1);
-    return d.toISOString().split('T')[0];
+    return getLocalDateInputValue(d);
   });
-  const [endDate, setEndDate] = useState(() => {
-    return new Date().toISOString().split('T')[0];
-  });
+  const [endDate, setEndDate] = useState(() => getLocalDateInputValue());
 
   // Estado para expandir/recolher vendas por cliente
   const [expandedClientId, setExpandedClientId] = useState<string | null>(null);
@@ -41,16 +46,17 @@ export const Reports: React.FC = () => {
   const fetchReport = async () => {
     try {
       setLoading(true);
+      setError(null);
       const res = await api.get('/reports/by-client', {
         params: {
-          startDate: startDate || undefined,
-          endDate: endDate || undefined,
+          startDate: startDate ? toStartOfDayIso(startDate) : undefined,
+          endDate: endDate ? toEndOfDayIso(endDate) : undefined,
         },
       });
       setReport(res.data);
     } catch (err: any) {
       console.error(err);
-      setError('Erro ao gerar relatório por cliente');
+      setError(extractApiErrorMessage(err, 'Erro ao gerar relatório por cliente'));
     } finally {
       setLoading(false);
     }

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import { Client, Product } from '../types';
-import { formatCurrency } from '../utils/formatters';
+import { formatCurrency, extractApiErrorMessage } from '../utils/formatters';
 import {
   ShoppingCart,
   Plus,
@@ -171,9 +171,8 @@ export const NewSale: React.FC = () => {
     } catch (err: any) {
       console.error(err);
       setError(
-        err.response?.data?.message || 'Falha ao processar venda. Verifique o estoque dos itens.',
+        extractApiErrorMessage(err, 'Falha ao processar venda. Verifique o estoque dos itens.'),
       );
-    } finally {
       setSubmitting(false);
     }
   };
@@ -426,7 +425,7 @@ export const NewSale: React.FC = () => {
 
             <button
               type="submit"
-              disabled={submitting || cart.length === 0}
+              disabled={submitting || !!successMsg || cart.length === 0}
               className="w-full sm:w-auto px-8 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold shadow-md hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-50"
             >
               {submitting ? (

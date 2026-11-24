@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import api from '../api/client';
 import { DashboardMetrics } from '../types';
 import { StatCard } from '../components/StatCard';
-import { formatCurrency, formatDateTime } from '../utils/formatters';
+import { formatCurrency, formatDateTime, extractApiErrorMessage } from '../utils/formatters';
 import {
   DollarSign,
   TrendingUp,
@@ -28,11 +28,12 @@ export const Dashboard: React.FC = () => {
   const fetchMetrics = async () => {
     try {
       setLoading(true);
+      setError(null);
       const res = await api.get('/dashboard/metrics');
       setMetrics(res.data);
     } catch (err: any) {
       console.error(err);
-      setError('Falha ao carregar métricas do dashboard');
+      setError(extractApiErrorMessage(err, 'Falha ao carregar métricas do dashboard'));
     } finally {
       setLoading(false);
     }

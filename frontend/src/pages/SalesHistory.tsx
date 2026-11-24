@@ -2,7 +2,13 @@ import React, { useEffect, useState } from 'react';
 import api from '../api/client';
 import { Sale } from '../types';
 import { useAuth } from '../context/AuthContext';
-import { formatCurrency, formatDateTime } from '../utils/formatters';
+import {
+  formatCurrency,
+  formatDateTime,
+  toStartOfDayIso,
+  toEndOfDayIso,
+  extractApiErrorMessage,
+} from '../utils/formatters';
 import { Modal } from '../components/Modal';
 import { Receipt, Eye, Filter, Calendar, User, DollarSign, Clock, CheckCircle } from 'lucide-react';
 
@@ -29,9 +35,10 @@ export const SalesHistory: React.FC = () => {
   const fetchSales = async () => {
     try {
       setLoading(true);
+      setError(null);
       const params: any = {};
-      if (startDate) params.startDate = startDate;
-      if (endDate) params.endDate = endDate;
+      if (startDate) params.startDate = toStartOfDayIso(startDate);
+      if (endDate) params.endDate = toEndOfDayIso(endDate);
       if (paymentStatus) params.paymentStatus = paymentStatus;
       if (paymentType) params.paymentType = paymentType;
 
@@ -39,7 +46,7 @@ export const SalesHistory: React.FC = () => {
       setSales(res.data);
     } catch (err: any) {
       console.error(err);
-      setError('Erro ao carregar histórico de vendas');
+      setError(extractApiErrorMessage(err, 'Erro ao carregar histórico de vendas'));
     } finally {
       setLoading(false);
     }

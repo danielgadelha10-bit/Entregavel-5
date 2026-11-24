@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { extractApiErrorMessage } from '../utils/formatters';
 import { Lock, Mail, User, AlertCircle, ArrowRight, ShieldCheck } from 'lucide-react';
 
 export const Register: React.FC = () => {
@@ -44,7 +45,7 @@ export const Register: React.FC = () => {
     } catch (err: any) {
       console.error(err);
       setError(
-        err.response?.data?.message || 'Falha ao realizar cadastro. Tente novamente.',
+        extractApiErrorMessage(err, 'Falha ao realizar cadastro. Tente novamente.'),
       );
     } finally {
       setLoading(false);

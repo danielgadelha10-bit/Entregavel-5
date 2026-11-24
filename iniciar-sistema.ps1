@@ -1,32 +1,54 @@
 ﻿# Script PowerShell para iniciar o Sistema de Gestão Comercial Localmente
 $root = $PSScriptRoot
+Set-Location $root
 
 Write-Host "===================================================" -ForegroundColor Cyan
-Write-Host "    INICIANDO SISTEMA DE GESTÃO COMERCIAL          " -ForegroundColor Cyan
+Write-Host "    INICIANDO SISTEMA DE GESTÃO COMERCIAL (DOCKER) " -ForegroundColor Cyan
 Write-Host "===================================================" -ForegroundColor Cyan
 Write-Host ""
 
-# 1. Iniciar Backend
-Write-Host "[1/2] Iniciando Backend API NestJS na porta 3001..." -ForegroundColor Yellow
-Start-Process cmd.exe -ArgumentList "/k cd /d `"$root\backend`" && npm run start:dev"
+# 1. Garantir variáveis de ambiente do PATH para docker
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
 
-Start-Sleep -Seconds 4
+# 2. Iniciar containers com Docker Compose
+Write-Host "[1/3] Verificando e iniciando containers Docker..." -ForegroundColor Yellow
+docker compose up -d
 
-# 2. Iniciar Frontend
-Write-Host "[2/2] Iniciando Frontend React/Vite na porta 3000..." -ForegroundColor Yellow
-Start-Process cmd.exe -ArgumentList "/k cd /d `"$root\frontend`" && npm run dev"
+# 3. Aguardar serviços ficarem saudáveis
+Write-Host "[2/3] Aguardando inicialização completa dos serviços..." -ForegroundColor Yellow
+$maxAttempts = 30
+$attempt = 0
+$healthy = $false
 
-Start-Sleep -Seconds 3
+while ($attempt -lt $maxAttempts) {
+    Start-Sleep -Seconds 2
+    $attempt++
+    try {
+        $res = Invoke-RestMethod -Uri "http://localhost:3000/api/health" -Method Get -TimeoutSec 2 -ErrorAction Stop
+        if ($res.status -eq "ok") {
+            $healthy = $true
+            break
+        }
+    } catch {}
+}
 
-Write-Host ""
-Write-Host "Abrindo navegador em http://localhost:3000 ..." -ForegroundColor Green
+if ($healthy) {
+    Write-Host "✅ Backend e Banco de Dados 100% saudáveis!" -ForegroundColor Green
+} else {
+    Write-Host "⚠️ Os containers ainda estão inicializando ou requerem verificação." -ForegroundColor Yellow
+}
+
+# 4. Abrir navegador
+Write-Host "[3/3] Abrindo navegador em http://localhost:3000 ..." -ForegroundColor Green
 Start-Process "http://localhost:3000"
 
 Write-Host ""
 Write-Host "===================================================" -ForegroundColor Green
-Write-Host "  SISTEMA PRONTO!" -ForegroundColor Green
+Write-Host "  SISTEMA PRONTO PARA USO!" -ForegroundColor Green
 Write-Host "  Frontend: http://localhost:3000" -ForegroundColor White
 Write-Host "  Backend:  http://localhost:3001/api" -ForegroundColor White
+Write-Host "  Health:   http://localhost:3001/api/health" -ForegroundColor White
+Write-Host "  Postgres: localhost:5433" -ForegroundColor White
 Write-Host ""
 Write-Host "  Credenciais de Demonstração:" -ForegroundColor White
 Write-Host "  ADMIN:    admin@comercial.com   (senha: admin123)" -ForegroundColor White

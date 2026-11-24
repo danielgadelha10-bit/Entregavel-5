@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { PaymentStatus } from '@prisma/client';
+import { buildCreatedAtFilter } from '../common/date-range.util';
 
 @Injectable()
 export class ReportsService {
@@ -8,17 +9,9 @@ export class ReportsService {
 
   async getSalesReportByClient(startDate?: string, endDate?: string) {
     const where: any = {};
-
-    if (startDate || endDate) {
-      where.createdAt = {};
-      if (startDate) {
-        where.createdAt.gte = new Date(startDate);
-      }
-      if (endDate) {
-        const end = new Date(endDate);
-        end.setHours(23, 59, 59, 999);
-        where.createdAt.lte = end;
-      }
+    const createdAtFilter = buildCreatedAtFilter(startDate, endDate);
+    if (createdAtFilter) {
+      where.createdAt = createdAtFilter;
     }
 
     const sales = await this.prisma.sale.findMany({

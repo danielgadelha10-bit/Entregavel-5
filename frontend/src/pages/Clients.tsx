@@ -3,6 +3,7 @@ import api from '../api/client';
 import { Client } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { Modal } from '../components/Modal';
+import { extractApiErrorMessage } from '../utils/formatters';
 import { Users, Plus, Search, Edit2, Mail, Phone, ShoppingBag, AlertCircle } from 'lucide-react';
 
 export const Clients: React.FC = () => {
@@ -28,13 +29,14 @@ export const Clients: React.FC = () => {
   const fetchClients = async () => {
     try {
       setLoading(true);
+      setError(null);
       const res = await api.get('/clients', {
         params: { search: search || undefined },
       });
       setClients(res.data);
     } catch (err: any) {
       console.error(err);
-      setError('Erro ao carregar lista de clientes');
+      setError(extractApiErrorMessage(err, 'Erro ao carregar lista de clientes'));
     } finally {
       setLoading(false);
     }
@@ -73,7 +75,7 @@ export const Clients: React.FC = () => {
       fetchClients();
     } catch (err: any) {
       console.error(err);
-      setFormError(err.response?.data?.message || 'Falha ao salvar cliente');
+      setFormError(extractApiErrorMessage(err, 'Falha ao salvar cliente'));
     } finally {
       setSaving(false);
     }

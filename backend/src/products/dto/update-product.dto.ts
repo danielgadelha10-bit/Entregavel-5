@@ -8,6 +8,7 @@ export class UpdateProductDto {
 
   @IsOptional()
   @IsString()
+  @IsNotEmpty({ message: 'Unidade de medida não pode ser vazia' })
   unit?: string;
 
   @IsOptional()

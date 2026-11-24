@@ -9,6 +9,7 @@ import { SalesModule } from './sales/sales.module';
 import { StockModule } from './stock/stock.module';
 import { ReportsModule } from './reports/reports.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { AppController } from './app.controller';
 
 @Module({
   imports: [
@@ -26,5 +27,6 @@ import { DashboardModule } from './dashboard/dashboard.module';
     ReportsModule,
     DashboardModule,
   ],
+  controllers: [AppController],
 })
 export class AppModule {}

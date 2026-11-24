@@ -1,8 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SalesService } from './sales.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { PaymentStatus, PaymentType, StockMovementType } from '@prisma/client';
-import { BadRequestException } from '@nestjs/common';
+import { PaymentStatus, PaymentType, Role, StockMovementType } from '@prisma/client';
+import { BadRequestException, ForbiddenException } from '@nestjs/common';
 
 describe('SalesService (Regras de Vendas, Estoque e Pagamentos)', () => {
   let service: SalesService;
@@ -79,6 +79,31 @@ describe('SalesService (Regras de Vendas, Estoque e Pagamentos)', () => {
     ).rejects.toThrow(BadRequestException);
 
     // Garante que a transação abortou e nenhuma venda foi criada
+    expect(txMock.sale.create).not.toHaveBeenCalled();
+  });
+
+  it('deve consolidar itens repetidos e cancelar venda se soma exceder estoque', async () => {
+    txMock.client.findUnique.mockResolvedValue({ id: 'client-1', name: 'Cliente Teste' });
+    txMock.product.findUnique.mockResolvedValue({
+      id: 'prod-1',
+      name: 'Produto Único',
+      price: 1000,
+      stock: 5,
+      active: true,
+    });
+
+    await expect(
+      service.create('seller-1', {
+        clientId: 'client-1',
+        paymentType: PaymentType.A_VISTA,
+        items: [
+          { productId: 'prod-1', quantity: 3 },
+          { productId: 'prod-1', quantity: 4 },
+        ],
+      }),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(txMock.product.update).not.toHaveBeenCalled();
     expect(txMock.sale.create).not.toHaveBeenCalled();
   });
 
@@ -159,6 +184,7 @@ describe('SalesService (Regras de Vendas, Estoque e Pagamentos)', () => {
   it('deve realizar a baixa de pagamento pendente com sucesso na primeira vez', async () => {
     txMock.sale.findUnique.mockResolvedValue({
       id: 'sale-pendente',
+      sellerId: 'seller-1',
       paymentStatus: PaymentStatus.PENDENTE,
       paidAt: null,
       total: 10000,
@@ -166,12 +192,16 @@ describe('SalesService (Regras de Vendas, Estoque e Pagamentos)', () => {
 
     txMock.sale.update.mockResolvedValue({
       id: 'sale-pendente',
+      sellerId: 'seller-1',
       paymentStatus: PaymentStatus.PAGO,
       paidAt: new Date(),
       total: 10000,
     });
 
-    const result = await service.settlePayment('sale-pendente');
+    const result = await service.settlePayment('sale-pendente', {
+      id: 'seller-1',
+      role: Role.OPERADOR,
+    });
     expect(result.paymentStatus).toBe(PaymentStatus.PAGO);
     expect(txMock.sale.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -183,9 +213,25 @@ describe('SalesService (Regras de Vendas, Estoque e Pagamentos)', () => {
     );
   });
 
+  it('deve PROIBIR OPERADOR de baixar pagamento de venda de outro vendedor', async () => {
+    txMock.sale.findUnique.mockResolvedValue({
+      id: 'sale-outro',
+      sellerId: 'seller-2',
+      paymentStatus: PaymentStatus.PENDENTE,
+      paidAt: null,
+      total: 10000,
+    });
+
+    await expect(
+      service.settlePayment('sale-outro', { id: 'seller-1', role: Role.OPERADOR }),
+    ).rejects.toThrow(ForbiddenException);
+    expect(txMock.sale.update).not.toHaveBeenCalled();
+  });
+
   it('deve PROIBIR e rejeitar nova baixa se o pagamento já estiver PAGO', async () => {
     txMock.sale.findUnique.mockResolvedValue({
       id: 'sale-ja-paga',
+      sellerId: 'seller-1',
       paymentStatus: PaymentStatus.PAGO,
       paidAt: new Date('2026-11-20T10:00:00Z'),
       total: 10000,

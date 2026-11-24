@@ -19,7 +19,13 @@ const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(() => {
     const saved = localStorage.getItem('user');
-    return saved ? JSON.parse(saved) : null;
+    if (!saved) return null;
+    try {
+      return JSON.parse(saved);
+    } catch {
+      localStorage.removeItem('user');
+      return null;
+    }
   });
   const [isLoading, setIsLoading] = useState(true);
 
@@ -54,7 +60,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(userData);
   };
 
-  const logout = () => {
+  const logout = async () => {
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      try {
+        await api.post('/auth/logout');
+      } catch {
+        // Ignora falhas de rede/sessão já expirada no logout
+      }
+    }
     localStorage.removeItem('access_token');
     localStorage.removeItem('user');
     setUser(null);

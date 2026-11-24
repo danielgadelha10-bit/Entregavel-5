@@ -6,8 +6,11 @@ async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
   // Habilitar CORS para o frontend (Vite local, Amplify em produção, etc.)
+  const corsOrigin = process.env.CORS_ORIGIN
+    ? process.env.CORS_ORIGIN.split(',').map((origin) => origin.trim())
+    : true;
   app.enableCors({
-    origin: true,
+    origin: corsOrigin,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     credentials: true,
   });
@@ -28,7 +31,7 @@ async function bootstrap() {
   );
 
   const port = process.env.PORT || 3001;
-  await app.listen(port);
+  await app.listen(port, '0.0.0.0');
   console.log(`🚀 Backend Sistema de Gestão Comercial rodando na porta ${port}`);
   console.log(`📡 API REST disponível em: http://localhost:${port}/api`);
 }

@@ -4,15 +4,16 @@ import * as argon2 from 'argon2';
 const prisma = new PrismaClient();
 
 async function main() {
-  console.log('🌱 Iniciando seed do banco de dados...');
+  console.log('🌱 Verificando inicialização do banco de dados...');
 
-  // Limpeza de tabelas para seed limpo
-  await prisma.stockMovement.deleteMany();
-  await prisma.saleItem.deleteMany();
-  await prisma.sale.deleteMany();
-  await prisma.client.deleteMany();
-  await prisma.product.deleteMany();
-  await prisma.user.deleteMany();
+  // Se já houver usuários cadastrados, não apagar dados existentes
+  const userCount = await prisma.user.count();
+  if (userCount > 0) {
+    console.log('ℹ️ Banco de dados já possui registros cadastrados. Preservando dados existentes.');
+    return;
+  }
+
+  console.log('🌱 Banco vazio detectado. Executando seed inicial...');
 
   // 1. Criar Usuários (O primeiro é ADMIN, o segundo é OPERADOR)
   const passwordHash = await argon2.hash('admin123');

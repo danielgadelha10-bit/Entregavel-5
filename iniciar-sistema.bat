@@ -1,27 +1,23 @@
 @echo off
 chcp 65001 > nul
-title Sistema de Gestao Comercial - Inicializador Local
+title Sistema de Gestao Comercial - Docker Local
 
 echo ===================================================
-echo     INICIANDO SISTEMA DE GESTAO COMERCIAL
+echo     INICIANDO SISTEMA DE GESTAO COMERCIAL (DOCKER)
 echo ===================================================
 echo.
 
-REM 1. Iniciar Backend na porta 3001
-echo [1/2] Iniciando Backend API NestJS na porta 3001...
-start "Backend API (Porta 3001)" cmd /k "cd /d %~dp0backend && npm run start:dev"
+cd /d %~dp0
 
-REM Aguardar 5 segundos para o backend inicializar
+echo [1/3] Subindo containers via Docker Compose...
+docker compose up -d
+
+echo.
+echo [2/3] Aguardando inicializacao dos servicos...
 timeout /t 5 /nobreak > nul
 
-REM 2. Iniciar Frontend na porta 3000
-echo [2/2] Iniciando Frontend React/Vite na porta 3000...
-start "Frontend Web (Porta 3000)" cmd /k "cd /d %~dp0frontend && npm run dev"
-
-REM Aguardar 3 segundos e abrir o navegador
-timeout /t 3 /nobreak > nul
 echo.
-echo Abrindo o navegador em http://localhost:3000 ...
+echo [3/3] Abrindo o navegador em http://localhost:3000 ...
 start http://localhost:3000
 
 echo.
@@ -29,6 +25,8 @@ echo ===================================================
 echo   SISTEMA PRONTO!
 echo   Frontend: http://localhost:3000
 echo   Backend:  http://localhost:3001/api
+echo   Health:   http://localhost:3001/api/health
+echo   Postgres: localhost:5433
 echo.
 echo   Credenciais de Acesso:
 echo   ADMIN:    admin@comercial.com   (senha: admin123)

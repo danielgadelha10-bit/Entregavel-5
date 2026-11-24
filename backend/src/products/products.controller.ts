@@ -2,10 +2,11 @@ import { Controller, Get, Post, Patch, Body, Param, Query, UseGuards } from '@ne
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
+import { AdjustStockDto } from './dto/adjust-stock.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
-import { Role, StockMovementType } from '@prisma/client';
+import { Role } from '@prisma/client';
 
 @Controller('products')
 @UseGuards(JwtAuthGuard, RolesGuard)
@@ -37,10 +38,7 @@ export class ProductsController {
 
   @Post(':id/adjust-stock')
   @Roles(Role.ADMIN)
-  async adjustStock(
-    @Param('id') id: string,
-    @Body() body: { quantity: number; type: StockMovementType; reason: string },
-  ) {
-    return this.productsService.adjustStock(id, body.quantity, body.type, body.reason);
+  async adjustStock(@Param('id') id: string, @Body() dto: AdjustStockDto) {
+    return this.productsService.adjustStock(id, dto.quantity, dto.type, dto.reason);
   }
 }

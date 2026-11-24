@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '../api/client';
 import { Sale } from '../types';
-import { formatCurrency, formatDateTime } from '../utils/formatters';
+import { formatCurrency, formatDateTime, extractApiErrorMessage } from '../utils/formatters';
 import { Modal } from '../components/Modal';
 import { Clock, CheckCircle2, AlertCircle, DollarSign, User, Calendar } from 'lucide-react';
 
@@ -60,7 +60,7 @@ export const PendingPayments: React.FC = () => {
     } catch (err: any) {
       console.error(err);
       setSettleError(
-        err.response?.data?.message || 'Falha ao baixar pagamento. Tente novamente.',
+        extractApiErrorMessage(err, 'Falha ao baixar pagamento. Tente novamente.'),
       );
     } finally {
       setSettling(false);
